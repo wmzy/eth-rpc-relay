@@ -40,6 +40,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
-          npm_config_workspaces: false
-        run: npx semantic-release
+        run: |
+          npm config set workspaces-update false --global
+          npx semantic-release
         working-directory: packages/sdk
