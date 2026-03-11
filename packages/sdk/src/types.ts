@@ -27,6 +27,7 @@ export type ChainRoute = {
   chainId: number;
   providerId: string;
   authType: string;
+  tokenRequired: boolean;
   isDefault: boolean;
 };
 

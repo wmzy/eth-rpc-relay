@@ -250,6 +250,7 @@ app.get("/api/relay-config", async (c) => {
       chainId: p.chainId,
       providerId: p.id,
       authType: p.authType,
+      tokenRequired: p.tokenRequired,
       isDefault: p.isDefault,
     }));
   return c.json({
@@ -295,6 +296,7 @@ adminAuth.put("/api/providers/:id", async (c) => {
     name: body.name ?? "",
     upstreamUrl: body.upstreamUrl ?? "",
     authType: body.authType ?? "none",
+    tokenRequired: body.tokenRequired ?? false,
     chainId: body.chainId ?? 1,
     blockTimeMs: body.blockTimeMs ?? 12000,
     isDefault: body.isDefault ?? false,

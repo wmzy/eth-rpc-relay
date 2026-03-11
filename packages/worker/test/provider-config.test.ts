@@ -6,6 +6,7 @@ const makeProvider = (overrides: Partial<ProviderInput> = {}): ProviderInput => 
   name: "Test Provider",
   upstreamUrl: "https://rpc.example.com",
   authType: "none" as AuthType,
+  tokenRequired: false,
   chainId: 1,
   blockTimeMs: 12000,
   isDefault: false,

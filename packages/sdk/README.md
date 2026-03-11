@@ -41,7 +41,11 @@ const response = await relayFetch("https://any-rpc-url.com", {
 ### Auto-config — Multi-chain routing
 
 ```typescript
-import { createRelay } from "eth-rpc-relay";
+import {
+  createRelay,
+  createFetchForChain,
+  createFetch,
+} from "eth-rpc-relay";
 
 // Different providers may require different tokens
 const relay = await createRelay({
@@ -56,15 +60,15 @@ const relay = await createRelay({
 // Check which chains are supported
 console.log(relay.chainIds); // [1, 137, 42161, ...]
 
-// Create a fetch function for a specific chain (uses token from tokens map)
-const ethFetch = relay.createFetchForChain(1);
+// All functions are standalone — tree-shakeable
+const ethFetch = createFetchForChain(relay, 1);
 
-// Or override token per-call
-const polyFetch = relay.createFetchForChain(137, "override-token");
+// Override token per-call
+const polyFetch = createFetchForChain(relay, 137, "override-token");
 
 // Smart fetch: auto-detects chain ID from the RPC endpoint,
 // routes through relay if supported, falls back to direct fetch otherwise
-const smartFetch = relay.createFetch("https://eth-mainnet.g.alchemy.com/v2/key");
+const smartFetch = createFetch(relay, "https://eth-mainnet.g.alchemy.com/v2/key");
 ```
 
 If all chains share the same token, pass a string instead:
@@ -133,7 +137,7 @@ type RelayConfig = {
 
 ### `createRelay(options: RelayOptions)`
 
-Fetches configuration from the relay server and returns a `Relay` object with multi-chain routing.
+Fetches configuration from the relay server and returns a `Relay` data object. Use the standalone functions below to operate on it.
 
 ```typescript
 type TokenMap = Record<number, string>;  // { [chainId]: "token" }
@@ -148,13 +152,24 @@ type RelayOptions = {
 
 type Relay = {
   config: RelayRemoteConfig;
+  options: RelayOptions;
   chainIds: number[];
-  supportsChain: (chainId: number) => boolean;
-  getProviderForChain: (chainId: number) => ChainRoute | undefined;
-  createFetchForChain: (chainId: number, token?: string) => FetchFn | null;
-  createFetch: (originalUrl?: string, token?: string) => FetchFn;
+  chainMap: Map<number, ChainRoute>;
 };
 ```
+
+### Relay helper functions
+
+All functions take `relay: Relay` as the first argument for tree-shaking support.
+
+| Function | Description |
+|---|---|
+| `supportsChain(relay, chainId)` | Whether the relay supports a given chain |
+| `isTokenRequired(relay, chainId)` | Whether the chain's provider requires a client token |
+| `getProviderForChain(relay, chainId)` | Get `ChainRoute` for a chain |
+| `createFetchForChain(relay, chainId, token?)` | Create a relay `fetch` for a specific chain; returns `null` if unsupported or token missing when required |
+| `createFetch(relay, originalUrl?, token?)` | Smart `fetch` that auto-detects chain ID, routes via relay if supported, falls back to direct otherwise |
+| `resolveToken(tokens, chainId)` | Resolve the effective token from a `TokenMap \| string` |
 
 ### Lower-level utilities
 

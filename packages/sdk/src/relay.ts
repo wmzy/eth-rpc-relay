@@ -14,14 +14,12 @@ export type RelayOptions = {
 
 export type Relay = {
   config: RelayRemoteConfig;
+  options: RelayOptions;
   chainIds: number[];
-  supportsChain: (chainId: number) => boolean;
-  getProviderForChain: (chainId: number) => ChainRoute | undefined;
-  createFetchForChain: (chainId: number, token?: string) => ReturnType<typeof createRelayFetch> | null;
-  createFetch: (originalUrl?: string, token?: string) => (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  chainMap: Map<number, ChainRoute>;
 };
 
-const resolveToken = (tokens: TokenMap | string | undefined, chainId: number): string | undefined => {
+export const resolveToken = (tokens: TokenMap | string | undefined, chainId: number): string | undefined => {
   if (!tokens) return undefined;
   if (typeof tokens === "string") return tokens;
   return tokens[chainId];
@@ -61,55 +59,70 @@ export const createRelay = async (options: RelayOptions): Promise<Relay> => {
     }
   }
 
-  const supportsChain = (chainId: number) => chainMap.has(chainId);
-
-  const getProviderForChain = (chainId: number) => chainMap.get(chainId);
-
-  const createFetchForChain = (chainId: number, token?: string) => {
-    const route = chainMap.get(chainId);
-    if (!route) return null;
-    const relayConfig: RelayConfig = {
-      relayUrl: config.relayUrl,
-      providerId: route.providerId,
-      token: token ?? resolveToken(options.tokens, chainId),
-      batchSplitEnabled: options.batchSplitEnabled,
-      logsChunkSize: options.logsChunkSize,
-      maxUrlLength: config.maxUrlLength,
-      fetchFn,
-    };
-    return createRelayFetch(relayConfig);
-  };
-
-  const createFetch = (originalUrl?: string, token?: string) => {
-    const relayFetchCache = new Map<number, ReturnType<typeof createRelayFetch>>();
-    let detectedChainId: number | null | undefined;
-
-    return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      if (detectedChainId === undefined && originalUrl) {
-        detectedChainId = await detectChainId(originalUrl, fetchFn);
-      }
-
-      if (detectedChainId !== undefined && detectedChainId !== null && supportsChain(detectedChainId)) {
-        const cached = relayFetchCache.get(detectedChainId);
-        if (cached) return cached(input, init);
-        const effectiveToken = token ?? resolveToken(options.tokens, detectedChainId);
-        const fn = createFetchForChain(detectedChainId, effectiveToken);
-        if (fn) {
-          relayFetchCache.set(detectedChainId, fn);
-          return fn(input, init);
-        }
-      }
-
-      return fetchFn(input, init);
-    };
-  };
-
   return {
     config,
+    options,
     chainIds: [...chainMap.keys()],
-    supportsChain,
-    getProviderForChain,
-    createFetchForChain,
-    createFetch,
+    chainMap,
+  };
+};
+
+export const supportsChain = (relay: Relay, chainId: number): boolean =>
+  relay.chainMap.has(chainId);
+
+export const isTokenRequired = (relay: Relay, chainId: number): boolean =>
+  relay.chainMap.get(chainId)?.tokenRequired ?? false;
+
+export const getProviderForChain = (relay: Relay, chainId: number): ChainRoute | undefined =>
+  relay.chainMap.get(chainId);
+
+export const createFetchForChain = (
+  relay: Relay,
+  chainId: number,
+  token?: string
+): ReturnType<typeof createRelayFetch> | null => {
+  const route = relay.chainMap.get(chainId);
+  if (!route) return null;
+  const effectiveToken = token ?? resolveToken(relay.options.tokens, chainId);
+  if (route.tokenRequired && !effectiveToken) return null;
+  const fetchFn = relay.options.fetchFn ?? fetch;
+  const relayConfig: RelayConfig = {
+    relayUrl: relay.config.relayUrl,
+    providerId: route.providerId,
+    token: effectiveToken,
+    batchSplitEnabled: relay.options.batchSplitEnabled,
+    logsChunkSize: relay.options.logsChunkSize,
+    maxUrlLength: relay.config.maxUrlLength,
+    fetchFn,
+  };
+  return createRelayFetch(relayConfig);
+};
+
+export const createFetch = (
+  relay: Relay,
+  originalUrl?: string,
+  token?: string
+): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> => {
+  const fetchFn = relay.options.fetchFn ?? fetch;
+  const relayFetchCache = new Map<number, ReturnType<typeof createRelayFetch>>();
+  let detectedChainId: number | null | undefined;
+
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    if (detectedChainId === undefined && originalUrl) {
+      detectedChainId = await detectChainId(originalUrl, fetchFn);
+    }
+
+    if (detectedChainId !== undefined && detectedChainId !== null && supportsChain(relay, detectedChainId)) {
+      const cached = relayFetchCache.get(detectedChainId);
+      if (cached) return cached(input, init);
+      const effectiveToken = token ?? resolveToken(relay.options.tokens, detectedChainId);
+      const fn = createFetchForChain(relay, detectedChainId, effectiveToken);
+      if (fn) {
+        relayFetchCache.set(detectedChainId, fn);
+        return fn(input, init);
+      }
+    }
+
+    return fetchFn(input, init);
   };
 };

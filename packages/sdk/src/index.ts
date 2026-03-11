@@ -1,5 +1,14 @@
 export { createRelayFetch } from "./interceptor";
-export { createRelay, fetchRelayConfig } from "./relay";
+export {
+  createRelay,
+  fetchRelayConfig,
+  supportsChain,
+  isTokenRequired,
+  getProviderForChain,
+  createFetchForChain,
+  createFetch,
+  resolveToken,
+} from "./relay";
 export type { Relay, RelayOptions, TokenMap } from "./relay";
 export { sendBatchAsSplitRequests, splitBatch } from "./batch-handler";
 export { fetchLogsOptimized, splitLogRange } from "./logs-optimizer";

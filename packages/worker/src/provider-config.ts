@@ -8,6 +8,7 @@ export type Provider = {
   name: string;
   upstreamUrl: string;
   authType: AuthType;
+  tokenRequired: boolean;
   chainId: number;
   blockTimeMs: number;
   isDefault: boolean;
@@ -23,6 +24,7 @@ type ProviderRow = {
   name: string;
   upstream_url: string;
   auth_type: string;
+  token_required: number;
   chain_id: number;
   block_time_ms: number;
   is_default: number;
@@ -36,6 +38,7 @@ const rowToProvider = (row: ProviderRow): Provider => ({
   name: row.name,
   upstreamUrl: row.upstream_url,
   authType: row.auth_type as AuthType,
+  tokenRequired: row.token_required === 1,
   chainId: row.chain_id,
   blockTimeMs: row.block_time_ms,
   isDefault: row.is_default === 1,
@@ -55,6 +58,7 @@ export class ProviderConfig extends DurableObject<Env> {
         name TEXT NOT NULL,
         upstream_url TEXT NOT NULL,
         auth_type TEXT DEFAULT 'none',
+        token_required INTEGER DEFAULT 0,
         chain_id INTEGER DEFAULT 1,
         block_time_ms INTEGER DEFAULT 12000,
         is_default INTEGER DEFAULT 0,
@@ -63,6 +67,18 @@ export class ProviderConfig extends DurableObject<Env> {
         updated_at INTEGER NOT NULL
       )
     `);
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS _migrations (key TEXT PRIMARY KEY)
+    `);
+    const migrated = this.ctx.storage.sql
+      .exec("SELECT 1 FROM _migrations WHERE key = 'add_token_required'")
+      .toArray();
+    if (migrated.length === 0) {
+      try {
+        this.ctx.storage.sql.exec("ALTER TABLE providers ADD COLUMN token_required INTEGER DEFAULT 0");
+      } catch { /* column may already exist from CREATE TABLE */ }
+      this.ctx.storage.sql.exec("INSERT OR IGNORE INTO _migrations (key) VALUES ('add_token_required')");
+    }
     this.initialized = true;
   }
 
@@ -103,12 +119,13 @@ export class ProviderConfig extends DurableObject<Env> {
     }
 
     this.ctx.storage.sql.exec(
-      `INSERT INTO providers (id, name, upstream_url, auth_type, chain_id, block_time_ms, is_default, enabled, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO providers (id, name, upstream_url, auth_type, token_required, chain_id, block_time_ms, is_default, enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          name = excluded.name,
          upstream_url = excluded.upstream_url,
          auth_type = excluded.auth_type,
+         token_required = excluded.token_required,
          chain_id = excluded.chain_id,
          block_time_ms = excluded.block_time_ms,
          is_default = excluded.is_default,
@@ -118,6 +135,7 @@ export class ProviderConfig extends DurableObject<Env> {
       input.name,
       input.upstreamUrl,
       input.authType,
+      input.tokenRequired ? 1 : 0,
       input.chainId,
       input.blockTimeMs,
       input.isDefault ? 1 : 0,

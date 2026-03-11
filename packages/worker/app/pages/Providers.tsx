@@ -9,6 +9,7 @@ type Provider = {
   name: string;
   upstreamUrl: string;
   authType: AuthType;
+  tokenRequired: boolean;
   chainId: number;
   blockTimeMs: number;
   isDefault: boolean;
@@ -23,7 +24,7 @@ const AUTH_TYPE_LABELS: Record<AuthType, string> = {
 };
 
 const EMPTY: Provider = {
-  id: "", name: "", upstreamUrl: "", authType: "none",
+  id: "", name: "", upstreamUrl: "", authType: "none", tokenRequired: false,
   chainId: 1, blockTimeMs: 12000, isDefault: false, enabled: true,
 };
 
@@ -65,7 +66,7 @@ export const Providers = ({ authFetch }: { authFetch: AuthFetch }) => {
       <div className="card">
         <table>
           <thead>
-            <tr><th>ID</th><th>Name</th><th>Upstream URL</th><th>Token Mode</th><th>Chain</th><th>Default</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>ID</th><th>Name</th><th>Upstream URL</th><th>Token Mode</th><th>Token</th><th>Chain</th><th>Default</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {providers.map((p) => (
@@ -74,6 +75,7 @@ export const Providers = ({ authFetch }: { authFetch: AuthFetch }) => {
                 <td>{p.name}</td>
                 <td style={{ fontFamily: "var(--mono)", fontSize: ".72rem", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.upstreamUrl}</td>
                 <td><span className="badge badge-muted">{p.authType}</span></td>
+                <td>{p.tokenRequired ? <span className="badge badge-red">Required</span> : <span className="badge badge-muted">Optional</span>}</td>
                 <td>{p.chainId}</td>
                 <td>{p.isDefault ? <span className="badge badge-green">Default</span> : "—"}</td>
                 <td>{p.enabled ? <span className="badge badge-green">Active</span> : <span className="badge badge-red">Disabled</span>}</td>
@@ -123,6 +125,16 @@ export const Providers = ({ authFetch }: { authFetch: AuthFetch }) => {
                 {editing.authType === "api-key" && `Client token is appended to URL path: ${editing.upstreamUrl.replace(/\/$/, "")}/\{token\}`}
                 {editing.authType === "bearer" && "Client token is sent as: Authorization: Bearer {token}"}
                 {editing.authType === "url-param" && "Client token is sent as query parameter: ?key={token}"}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>
+                <input type="checkbox" checked={editing.tokenRequired} onChange={(e) => setEditing({ ...editing, tokenRequired: e.target.checked })} style={{ width: "auto", marginRight: ".4rem" }} />
+                Token Required
+              </label>
+              <div style={{ fontSize: ".65rem", color: "var(--muted)", marginTop: ".3rem" }}>
+                When enabled, SDK clients without a token will skip this relay and send requests directly to the upstream.
               </div>
             </div>
 
