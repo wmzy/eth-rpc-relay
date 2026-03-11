@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 
+type AuthFetch = (url: string, init?: RequestInit) => Promise<Response>;
+
 type AuthType = "none" | "bearer" | "api-key" | "url-param";
 
 type Provider = {
@@ -25,14 +27,14 @@ const EMPTY: Provider = {
   chainId: 1, blockTimeMs: 12000, isDefault: false, enabled: true,
 };
 
-export const Providers = () => {
+export const Providers = ({ authFetch }: { authFetch: AuthFetch }) => {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [editing, setEditing] = useState<Provider | null>(null);
   const [isNew, setIsNew] = useState(false);
 
   const load = useCallback(() => {
-    fetch("/api/providers").then((r) => r.json() as Promise<Provider[]>).then(setProviders);
-  }, []);
+    authFetch("/api/providers").then((r) => r.json() as Promise<Provider[]>).then(setProviders);
+  }, [authFetch]);
 
   useEffect(load, [load]);
 
@@ -40,13 +42,13 @@ export const Providers = () => {
     if (!editing) return;
     const method = isNew ? "POST" : "PUT";
     const url = isNew ? "/api/providers" : `/api/providers/${editing.id}`;
-    await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(editing) });
+    await authFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(editing) });
     setEditing(null);
     load();
   };
 
   const remove = async (id: string) => {
-    await fetch(`/api/providers/${id}`, { method: "DELETE" });
+    await authFetch(`/api/providers/${id}`, { method: "DELETE" });
     load();
   };
 

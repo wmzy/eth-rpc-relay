@@ -240,20 +240,55 @@ const handleRpc = async (c: { req: { raw: Request; url: string; header: (n: stri
 app.all("/rpc/*", async (c) => handleRpc(c));
 app.all("/rpc", async (c) => handleRpc(c));
 
+// ── Public API: Relay config (for SDK auto-discovery) ──
+
+app.get("/api/relay-config", async (c) => {
+  const providers = await getProviderConfigStub(c.env).listProviders();
+  const chains = providers
+    .filter((p) => p.enabled)
+    .map((p) => ({
+      chainId: p.chainId,
+      providerId: p.id,
+      authType: p.authType,
+      isDefault: p.isDefault,
+    }));
+  return c.json({
+    relayUrl: new URL("/", c.req.url).origin,
+    chains,
+    maxUrlLength: parseInt(c.env.MAX_URL_LENGTH) || 2048,
+  });
+});
+
+// ── Admin auth middleware ──
+
+const adminAuth = new Hono<HonoEnv>();
+
+adminAuth.use("*", async (c, next) => {
+  const token = c.req.header("Authorization")?.replace("Bearer ", "");
+  if (!c.env.ADMIN_TOKEN || c.env.ADMIN_TOKEN === token) {
+    return next();
+  }
+  return c.json({ error: "Unauthorized" }, 401);
+});
+
+// ── Admin API: Auth check ──
+
+adminAuth.post("/api/auth/verify", (c) => c.json({ ok: true }));
+
 // ── Admin API: Providers ──
 
-app.get("/api/providers", async (c) => {
+adminAuth.get("/api/providers", async (c) => {
   const providers = await getProviderConfigStub(c.env).listProviders();
   return c.json(providers);
 });
 
-app.post("/api/providers", async (c) => {
+adminAuth.post("/api/providers", async (c) => {
   const input = (await c.req.json()) as ProviderInput;
   const provider = await getProviderConfigStub(c.env).upsertProvider(input);
   return c.json(provider, 201);
 });
 
-app.put("/api/providers/:id", async (c) => {
+adminAuth.put("/api/providers/:id", async (c) => {
   const body = (await c.req.json()) as Partial<ProviderInput>;
   const input: ProviderInput = {
     id: c.req.param("id"),
@@ -269,7 +304,7 @@ app.put("/api/providers/:id", async (c) => {
   return c.json(provider);
 });
 
-app.delete("/api/providers/:id", async (c) => {
+adminAuth.delete("/api/providers/:id", async (c) => {
   await getProviderConfigStub(c.env).deleteProvider(c.req.param("id"));
   return c.json({ ok: true });
 });
@@ -282,27 +317,29 @@ const RANGE_MAP: Record<string, number> = {
   "7d": 604_800_000,
 };
 
-app.get("/api/stats", async (c) => {
+adminAuth.get("/api/stats", async (c) => {
   const range = c.req.query("range") ?? "24h";
   const rangeMs = RANGE_MAP[range] ?? 86_400_000;
   const stats = await getStatsStub(c.env).getStats(rangeMs);
   return c.json(stats);
 });
 
-app.get("/api/stats/summary", async (c) => {
+adminAuth.get("/api/stats/summary", async (c) => {
   const summary = await getStatsStub(c.env).getSummary();
   return c.json(summary);
 });
 
 // ── Admin API: Config ──
 
-app.get("/api/config", (c) => {
+adminAuth.get("/api/config", (c) => {
   return c.json({
     defaultBlockTimeMs: parseInt(c.env.DEFAULT_BLOCK_TIME_MS) || 12000,
     defaultFinalizedCacheTtl: parseInt(c.env.DEFAULT_FINALIZED_CACHE_TTL) || 604800,
     maxUrlLength: parseInt(c.env.MAX_URL_LENGTH) || 2048,
   });
 });
+
+app.route("/", adminAuth);
 
 // ── Error handling ──
 

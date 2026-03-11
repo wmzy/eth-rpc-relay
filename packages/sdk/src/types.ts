@@ -23,4 +23,17 @@ export type RelayConfig = {
   fetchFn?: typeof fetch;
 };
 
+export type ChainRoute = {
+  chainId: number;
+  providerId: string;
+  authType: string;
+  isDefault: boolean;
+};
+
+export type RelayRemoteConfig = {
+  relayUrl: string;
+  chains: ChainRoute[];
+  maxUrlLength: number;
+};
+
 export type BlockTag = "latest" | "earliest" | "pending" | "safe" | "finalized" | string;

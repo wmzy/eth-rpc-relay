@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { StatsCard } from "../components/StatsCard";
 
+type AuthFetch = (url: string, init?: RequestInit) => Promise<Response>;
+
 type Summary = {
   totalRequests: number;
   cacheHits: number;
@@ -30,15 +32,15 @@ const formatHour = (ts: number) => {
   return `${d.getHours().toString().padStart(2, "0")}:00`;
 };
 
-export const Monitor = () => {
+export const Monitor = ({ authFetch }: { authFetch: AuthFetch }) => {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [hourly, setHourly] = useState<HourlyStat[]>([]);
   const [range, setRange] = useState("24h");
 
   useEffect(() => {
-    fetch("/api/stats/summary").then((r) => r.json() as Promise<Summary>).then(setSummary);
-    fetch(`/api/stats?range=${range}`).then((r) => r.json() as Promise<HourlyStat[]>).then(setHourly);
-  }, [range]);
+    authFetch("/api/stats/summary").then((r) => r.json() as Promise<Summary>).then(setSummary);
+    authFetch(`/api/stats?range=${range}`).then((r) => r.json() as Promise<HourlyStat[]>).then(setHourly);
+  }, [range, authFetch]);
 
   const hourlyAgg = (() => {
     const map = new Map<number, { hits: number; misses: number }>();

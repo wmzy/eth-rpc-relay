@@ -1,6 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createRelayFetch } from "eth-rpc-relay";
+import type { RelayConfig } from "eth-rpc-relay";
 
-type Provider = { id: string; name: string; isDefault: boolean };
+type AuthFetch = (url: string, init?: RequestInit) => Promise<Response>;
+
+type Provider = { id: string; name: string; chainId: number; authType: string; isDefault: boolean };
 
 type ResultEntry = {
   id: number;
@@ -26,42 +30,45 @@ const PRESETS: Record<string, unknown> = {
   logs: { jsonrpc: "2.0", method: "eth_getLogs", params: [{ fromBlock: "0x13B7BBE", toBlock: "0x13B7BC6", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }], id: 1 },
 };
 
-const serializeToGetUrl = (base: string, req: { method: string; params?: unknown[]; id: number | string }) => {
-  const url = new URL(`${base.replace(/\/$/, "")}/rpc`);
-  url.searchParams.set("method", req.method);
-  if (req.params?.length) url.searchParams.set("params", JSON.stringify(req.params));
-  url.searchParams.set("id", String(req.id));
-  const s = url.toString();
-  return s.length <= 2048 ? s : null;
-};
-
-const serializeRequest = (base: string, req: { method: string; params?: unknown[]; id: number | string }) => {
-  const g = serializeToGetUrl(base, req);
-  if (g) return { url: g, method: "GET" as const, body: undefined as string | undefined };
-  return { url: `${base.replace(/\/$/, "")}/rpc`, method: "POST" as const, body: JSON.stringify(req) };
-};
+const RPC_TOKEN_KEY = "eth-relay-rpc-token";
 
 let nextId = 1;
 
-export const TestConsole = () => {
+export const TestConsole = ({ authFetch }: { authFetch: AuthFetch }) => {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [providerId, setProviderId] = useState("");
-  const [authToken, setAuthToken] = useState("");
+  const [rpcToken, setRpcToken] = useState(() => localStorage.getItem(RPC_TOKEN_KEY) ?? "");
   const [customBody, setCustomBody] = useState("");
   const [results, setResults] = useState<ResultEntry[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
   const [log, setLog] = useState("Ready.\n");
 
   useEffect(() => {
-    fetch("/api/providers").then((r) => r.json() as Promise<Provider[]>).then((list) => {
+    authFetch("/api/providers").then((r) => r.json() as Promise<Provider[]>).then((list) => {
       setProviders(list);
       const def = list.find((p) => p.isDefault);
       if (def) setProviderId(def.id);
       else if (list.length > 0) setProviderId(list[0].id);
     });
+  }, [authFetch]);
+
+  const handleTokenChange = useCallback((val: string) => {
+    setRpcToken(val);
+    if (val) localStorage.setItem(RPC_TOKEN_KEY, val);
+    else localStorage.removeItem(RPC_TOKEN_KEY);
   }, []);
 
   const appendLog = (msg: string) => setLog((prev) => prev + msg + "\n");
+
+  const buildRelayFetch = useCallback(() => {
+    const relayConfig: RelayConfig = {
+      relayUrl: location.origin,
+      providerId: providerId || undefined,
+      token: rpcToken || undefined,
+      batchSplitEnabled: true,
+    };
+    return createRelayFetch(relayConfig);
+  }, [providerId, rpcToken]);
 
   const send = async (rpcBody: unknown) => {
     if (!providerId) {
@@ -70,32 +77,18 @@ export const TestConsole = () => {
     }
 
     const method = Array.isArray(rpcBody) ? `batch[${rpcBody.length}]` : ((rpcBody as { method?: string }).method ?? "unknown");
-    appendLog(`→ ${method}`);
+    appendLog(`→ ${method} (via SDK)`);
 
-    const relay = location.origin;
-    const headers: Record<string, string> = { "X-Provider-Id": providerId };
-    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-
+    const relayFetch = buildRelayFetch();
+    const rpcUrl = `${location.origin}/rpc`;
     const t0 = performance.now();
 
-    const doFetch = async (req: { method: string; params?: unknown[]; id: number | string }) => {
-      const s = serializeRequest(relay, req);
-      return fetch(s.url, {
-        method: s.method,
-        headers: { ...headers, ...(s.body ? { "Content-Type": "application/json" } : {}) },
-        body: s.body,
-      });
-    };
-
     try {
-      let resp: Response;
-      if (Array.isArray(rpcBody)) {
-        const resps = await Promise.all(rpcBody.map((r: { method: string; params?: unknown[]; id: number | string }, i: number) => doFetch({ ...r, id: r.id ?? i + 1 })));
-        const bodies = await Promise.all(resps.map((r) => r.json()));
-        resp = new Response(JSON.stringify(bodies), { headers: { "Content-Type": "application/json" } });
-      } else {
-        resp = await doFetch(rpcBody as { method: string; params?: unknown[]; id: number | string });
-      }
+      const resp = await relayFetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rpcBody),
+      });
 
       const elapsed = Math.round(performance.now() - t0);
       const body = await resp.clone().text();
@@ -124,6 +117,8 @@ export const TestConsole = () => {
     try { send(JSON.parse(customBody)); } catch (e) { appendLog(`Invalid JSON: ${(e as Error).message}`); }
   };
 
+  const selectedProvider = providers.find((p) => p.id === providerId);
+
   return (
     <div>
       <h2 className="page-title">Test Console</h2>
@@ -135,7 +130,7 @@ export const TestConsole = () => {
             <select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
               <option value="" disabled>— Select a provider —</option>
               {providers.map((p) => (
-                <option key={p.id} value={p.id}>{p.name || p.id}{p.isDefault ? " (default)" : ""}</option>
+                <option key={p.id} value={p.id}>{p.name || p.id} (chain {p.chainId}){p.isDefault ? " ★" : ""}</option>
               ))}
             </select>
             {providers.length === 0 && (
@@ -147,9 +142,9 @@ export const TestConsole = () => {
 
           <div className="form-group">
             <label>Your RPC Token</label>
-            <input type="password" value={authToken} onChange={(e) => setAuthToken(e.target.value)} placeholder="Your Alchemy/Infura API key..." />
+            <input type="password" value={rpcToken} onChange={(e) => handleTokenChange(e.target.value)} placeholder="Your Alchemy/Infura API key..." />
             <div style={{ fontSize: ".65rem", color: "var(--muted)", marginTop: ".2rem" }}>
-              Passed to the upstream provider for authentication. Cached responses are shared across all users.
+              Passed to upstream via {selectedProvider?.authType ?? "provider config"}. Saved locally.
             </div>
           </div>
 

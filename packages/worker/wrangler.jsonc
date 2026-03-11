@@ -26,6 +26,7 @@
   "vars": {
     "DEFAULT_BLOCK_TIME_MS": "12000",
     "DEFAULT_FINALIZED_CACHE_TTL": "604800",
-    "MAX_URL_LENGTH": "2048"
+    "MAX_URL_LENGTH": "2048",
+    "ADMIN_TOKEN": ""
   }
 }

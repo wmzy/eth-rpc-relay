@@ -6,6 +6,7 @@ export type Env = {
   DEFAULT_BLOCK_TIME_MS: string;
   DEFAULT_FINALIZED_CACHE_TTL: string;
   MAX_URL_LENGTH: string;
+  ADMIN_TOKEN: string;
 };
 
 export type JsonRpcRequest = {
