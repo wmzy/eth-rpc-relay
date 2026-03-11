@@ -3,6 +3,9 @@ name: Release
 on:
   push:
     branches: [main]
+    paths:
+      - "packages/sdk/**"
+      - ".github/workflows/release.yml"
 
 permissions:
   contents: write
