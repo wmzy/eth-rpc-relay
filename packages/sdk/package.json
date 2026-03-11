@@ -22,9 +22,11 @@
   },
   "keywords": [
     "ethereum",
+    "blockchain",
     "rpc",
     "cache",
     "relay",
+    "proxy",
     "web3"
   ],
   "repository": {

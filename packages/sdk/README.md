@@ -43,20 +43,37 @@ const response = await relayFetch("https://any-rpc-url.com", {
 ```typescript
 import { createRelay } from "eth-rpc-relay";
 
+// Different providers may require different tokens
 const relay = await createRelay({
   relayUrl: "https://your-relay.workers.dev",
-  token: "your-api-key",
+  tokens: {
+    1: "alchemy-eth-mainnet-key",      // Ethereum Mainnet
+    137: "alchemy-polygon-key",         // Polygon
+    42161: "infura-arbitrum-key",       // Arbitrum
+  },
 });
 
 // Check which chains are supported
 console.log(relay.chainIds); // [1, 137, 42161, ...]
 
-// Create a fetch function for a specific chain
+// Create a fetch function for a specific chain (uses token from tokens map)
 const ethFetch = relay.createFetchForChain(1);
 
-// Or create a smart fetch that auto-detects chain ID
-// and falls back to direct fetch for unsupported chains
-const smartFetch = relay.createFetch("https://eth-mainnet.g.alchemy.com/v2");
+// Or override token per-call
+const polyFetch = relay.createFetchForChain(137, "override-token");
+
+// Smart fetch: auto-detects chain ID from the RPC endpoint,
+// routes through relay if supported, falls back to direct fetch otherwise
+const smartFetch = relay.createFetch("https://eth-mainnet.g.alchemy.com/v2/key");
+```
+
+If all chains share the same token, pass a string instead:
+
+```typescript
+const relay = await createRelay({
+  relayUrl: "https://your-relay.workers.dev",
+  tokens: "shared-api-key",
+});
 ```
 
 ### With ethers.js
@@ -67,13 +84,12 @@ import { ethers } from "ethers";
 
 const relayFetch = createRelayFetch({
   relayUrl: "https://your-relay.workers.dev",
-  token: "your-api-key",
+  providerId: "alchemy-eth",
+  token: "your-alchemy-api-key",
 });
 
-const provider = new ethers.JsonRpcProvider("https://your-relay.workers.dev/rpc", undefined, {
-  staticNetwork: true,
-  batchStallTime: 0,
-});
+const provider = new ethers.FetchRequest("https://your-relay.workers.dev/rpc");
+provider.getUrlFunc = () => relayFetch;
 ```
 
 ### With viem
@@ -91,9 +107,8 @@ const relayFetch = createRelayFetch({
 
 const client = createPublicClient({
   chain: mainnet,
-  transport: http("https://your-relay.workers.dev/rpc", {
-    fetchOptions: {},
-    onFetchRequest(request) { /* uses relayFetch internally */ },
+  transport: http("https://any-rpc-url.com", {
+    fetchFn: relayFetch,
   }),
 });
 ```
@@ -121,9 +136,11 @@ type RelayConfig = {
 Fetches configuration from the relay server and returns a `Relay` object with multi-chain routing.
 
 ```typescript
+type TokenMap = Record<number, string>;  // { [chainId]: "token" }
+
 type RelayOptions = {
   relayUrl: string;
-  token?: string;
+  tokens?: TokenMap | string; // Per-chain tokens, or a single shared token
   batchSplitEnabled?: boolean;
   logsChunkSize?: number;
   fetchFn?: typeof fetch;
@@ -134,8 +151,8 @@ type Relay = {
   chainIds: number[];
   supportsChain: (chainId: number) => boolean;
   getProviderForChain: (chainId: number) => ChainRoute | undefined;
-  createFetchForChain: (chainId: number) => FetchFn | null;
-  createFetch: (originalUrl?: string) => FetchFn;
+  createFetchForChain: (chainId: number, token?: string) => FetchFn | null;
+  createFetch: (originalUrl?: string, token?: string) => FetchFn;
 };
 ```
 
