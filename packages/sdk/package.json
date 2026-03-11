@@ -1,6 +1,6 @@
 {
   "name": "eth-rpc-relay",
-  "version": "0.0.0-development",
+  "version": "0.1.0",
   "description": "ETH RPC Relay SDK - Accelerate Ethereum RPC requests via HTTP caching",
   "type": "module",
   "main": "dist/index.js",
