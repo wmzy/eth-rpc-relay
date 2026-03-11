@@ -1,0 +1,35 @@
+{
+  "name": "eth-rpc-relay-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/worker",
+    "build": "npm run build --workspace=packages/sdk && npm run build --workspace=packages/worker",
+    "build:sdk": "npm run build --workspace=packages/sdk",
+    "build:worker": "npm run build --workspace=packages/worker",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit -p packages/sdk/tsconfig.json && tsc --noEmit -p packages/worker/tsconfig.json",
+    "deploy": "npm run deploy --workspace=packages/worker",
+    "prepare": "npm run build:sdk"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20250303.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd",
+      "sharp"
+    ]
+  }
+}

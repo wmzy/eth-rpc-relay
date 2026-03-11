@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "eth-rpc-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-10",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/rpc/*", "/rpc", "/api/*", "/health"]
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "BLOCK_TRACKER", "class_name": "BlockTracker" },
+      { "name": "CACHE_STORE", "class_name": "CacheStore" },
+      { "name": "PROVIDER_CONFIG", "class_name": "ProviderConfig" },
+      { "name": "STATS_COLLECTOR", "class_name": "StatsCollector" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["BlockTracker", "CacheStore"] },
+    { "tag": "v2", "new_sqlite_classes": ["ProviderConfig", "StatsCollector"] }
+  ],
+  "vars": {
+    "DEFAULT_BLOCK_TIME_MS": "12000",
+    "DEFAULT_FINALIZED_CACHE_TTL": "604800",
+    "MAX_URL_LENGTH": "2048"
+  }
+}
